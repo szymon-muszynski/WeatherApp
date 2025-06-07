@@ -16,21 +16,21 @@ object FavoriteUtils {
         return getPrefs(context).getStringSet(FAVORITES_KEY, mutableSetOf()) ?: mutableSetOf()
     }
 
-    fun isFavorite(context: Context, city: String): Boolean {
-        return getFavorites(context).contains(city)
+    fun isFavorite(context: Context, city: String, country: String): Boolean {
+        return getFavorites(context).contains("$city,$country")
     }
 
-    fun addFavorite(context: Context, city: String) {
+    fun addFavorite(context: Context, city: String, country: String) {
         val prefs = getPrefs(context)
-        val favorites = getFavorites(context).toMutableSet() // <- kopia
-        favorites.add(city)
+        val favorites = getFavorites(context).toMutableSet()
+        favorites.add("$city,$country")
         prefs.edit().putStringSet(FAVORITES_KEY, favorites).apply()
     }
 
-    fun removeFavorite(context: Context, city: String) {
+    fun removeFavorite(context: Context, city: String, country: String) {
         val prefs = getPrefs(context)
-        val favorites = getFavorites(context).toMutableSet() // <- kopia
-        favorites.remove(city)
+        val favorites = getFavorites(context).toMutableSet()
+        favorites.remove("$city,$country")
         prefs.edit().putStringSet(FAVORITES_KEY, favorites).apply()
     }
 }

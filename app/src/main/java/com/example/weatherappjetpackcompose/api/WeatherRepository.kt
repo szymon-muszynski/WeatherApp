@@ -16,45 +16,35 @@ class WeatherRepository(private val context: Context) {
         .build()
         .create(WeatherApiService::class.java)
 
-    suspend fun getWeatherForecast(city: String, isFavorite: Boolean = false): WeatherResponse {
+    suspend fun getWeatherForecast(city: String, country: String, isFavorite: Boolean = false): WeatherResponse {
         val online = ConnectivityUtils.isOnline(context)
 
-        //sprawdzam czy dane dla ulubionych lokalizacji sa aktualne, inne mnie nieinteresuja bo zawsze odswiezam je
         if (online) {
             val isCacheValid = if (isFavorite)
-                CacheUtils.isCacheValid(context, city)
+                CacheUtils.isCacheValid(context, city, country)
             else
-                false // latest_city odswiezane zawsze
+                false
 
-            //jezeli nie jest aktualny, czyli dane sa przestarzale dla danego miasta
-            //to pobieram dane z neta, i w zaleznosci czy jest ulubiony czy nie,
-            //to korzystam z innego utils, bo w rozny sposob rozdzielam zapisywanie plikow
             if (!isCacheValid) {
-                val fresh = fetchFromNetwork(city)
+                val fresh = fetchFromNetwork("$city,$country")
 
                 if (isFavorite)
-                    CacheUtils.saveCache(context, city, fresh)
+                    CacheUtils.saveCache(context, city, country, fresh)
                 else
                     LatestCityCacheUtils.saveLatestCity(context, fresh)
 
                 return fresh
             }
 
-            //jezeli sa aktualne to wczytuje z pliku
-            //jezeli by sie okazalo jakims jednak cudem ze nie ma tam danych (null),
-            //to pobieram z neta od nowa i zapisuje je w odpowiedni sposob
-            return CacheUtils.loadCache(context, city)
-                ?: fetchFromNetwork(city).also {
-                    if (isFavorite) CacheUtils.saveCache(context, city, it)
+            return CacheUtils.loadCache(context, city, country)
+                ?: fetchFromNetwork("$city,$country").also {
+                    if (isFavorite) CacheUtils.saveCache(context, city, country, it)
                     else LatestCityCacheUtils.saveLatestCity(context, it)
                 }
-        }
-        //jezeli nie ma neta, to wczytuje z plikow odpowiednich
-        //jakby sie okazalo ze nie ma danych dla danego miasta to rzucam wyjatek
-        else {
+        } else {
             return if (isFavorite)
-                CacheUtils.loadCache(context, city)
-                    ?: throw IllegalStateException("Brak internetu i cache dla $city")
+                CacheUtils.loadCache(context, city, country)
+                    ?: throw IllegalStateException("Brak internetu i cache dla $city,$country")
             else
                 LatestCityCacheUtils.loadLatestCity(context)
                     ?: throw IllegalStateException("Brak internetu i brak danych latest_city")
@@ -64,18 +54,23 @@ class WeatherRepository(private val context: Context) {
     suspend fun refreshFavoritesIfNeeded(favoriteCities: List<String>) {
         if (!ConnectivityUtils.isOnline(context)) return
 
-        for (city in favoriteCities) {
-            if (!CacheUtils.isCacheValid(context, city)) {
-                try {
-                    val fresh = fetchFromNetwork(city)
-                    CacheUtils.saveCache(context, city, fresh)
-                } catch (_: Exception) { }
+        for (favorite in favoriteCities) {
+            val parts = favorite.split(",")
+            if (parts.size == 2) {
+                val city = parts[0]
+                val country = parts[1]
+                if (!CacheUtils.isCacheValid(context, city, country)) {
+                    try {
+                        val fresh = fetchFromNetwork("$city,$country")
+                        CacheUtils.saveCache(context, city, country, fresh)
+                    } catch (_: Exception) { }
+                }
             }
         }
     }
 
-    private suspend fun fetchFromNetwork(city: String): WeatherResponse {
+    private suspend fun fetchFromNetwork(cityAndCountry: String): WeatherResponse {
         val apiKey = "3134e3769c5e4c5e990190005250106"
-        return api.getForecast(apiKey, city)
+        return api.getForecast(apiKey, cityAndCountry)
     }
 }
