@@ -38,6 +38,7 @@ import java.util.Date
 import java.util.Locale
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.navigation.compose.*
 
 @Composable
 fun isTablet(): Boolean {
@@ -54,8 +55,8 @@ fun WeatherScreen(
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+    val isTablet = isTablet()
 
-    // 1) Zmieniamy inicjalizację na pustą
     var city by rememberSaveable { mutableStateOf("") }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var selectedTempUnit by rememberSaveable { mutableStateOf("°C") }
@@ -68,12 +69,9 @@ fun WeatherScreen(
     var locationCountry by remember { mutableStateOf("") }
 
     val snackbarHostState = remember { SnackbarHostState() }
-
     var lastUpdateTime by remember { mutableStateOf<Long?>(null) }
-
     var refreshTrigger by remember { mutableStateOf(0) }
 
-    // 2) Zawsze reagujemy, gdy defaultCity się zmieni (czyli po wyborze z menu)
     LaunchedEffect(defaultCity) {
         if (defaultCity.isNotEmpty()) {
             city = defaultCity
@@ -88,13 +86,11 @@ fun WeatherScreen(
             try {
                 val isFav = FavoriteUtils.getFavorites(context).contains(city)
                 val data = WeatherRepository(context).getWeatherForecast(city, isFav)
-
                 lastUpdateTime = if (isFav) {
                     CacheUtils.getLastUpdateTime(context, city)
                 } else {
                     LatestCityCacheUtils.getLastUpdateTime(context)
                 }
-
                 locationName = data.location.name
                 locationCountry = data.location.country
                 forecast = data.forecast.forecastday.map {
@@ -115,73 +111,216 @@ fun WeatherScreen(
         }
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)) {
-            SearchBar(
-                query = searchQuery,
-                onQueryChange = { searchQuery = it },
-                onSearch = {
-                    city = searchQuery
-                    onCityChanged(searchQuery)
-
-                    if (!isOnline(context)) {
-                        scope.launch {
-                            snackbarHostState.showSnackbar(
-                                message = "Brak internetu. Pokazano ostatnią zapisaną lokalizację.",
-                                duration = SnackbarDuration.Short
-                            )
-                        }
-                    }
-                },
-                onOpenSettings = onOpenSettings
-            )
-
-            when {
-                loading -> Box(Modifier.fillMaxSize(), Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-
-                error != null -> Box(Modifier.fillMaxSize(), Alignment.Center) {
-                    Text("Error: $error", Modifier.padding(16.dp))
-                }
-
-                else -> {
-
-                    val onRefresh: () -> Unit = {
-                        if (isOnline(context)) {
-                            if (FavoriteUtils.getFavorites(context).contains(city)) {
-                                CacheUtils.getFile(context, city).delete()
-                            }
-                            refreshTrigger++
-                        } else {
+    if (isTablet) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                SearchBar(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    onSearch = {
+                        city = searchQuery
+                        onCityChanged(searchQuery)
+                        if (!isOnline(context)) {
                             scope.launch {
                                 snackbarHostState.showSnackbar(
-                                    message = "Brak internetu. Nie można odświeżyć pogody.",
+                                    message = "Brak internetu. Pokazano ostatnią zapisaną lokalizację.",
                                     duration = SnackbarDuration.Short
                                 )
                             }
                         }
+                    },
+                    onOpenSettings = onOpenSettings
+                )
+                when {
+                    loading -> Box(Modifier.fillMaxSize(), Alignment.Center) {
+                        CircularProgressIndicator()
                     }
-
-                    if (isPortrait) {
-                        PortraitLayout(
-                            locationName, locationCountry, forecast, selectedTempUnit,
-                            onTempUnitChange = { selectedTempUnit = it },
-                            onRefresh = onRefresh,
-                            lastUpdateTime = lastUpdateTime
-                        )
-                    } else {
-                        LandscapeLayout(
-                            locationName, locationCountry, forecast, selectedTempUnit,
-                            onTempUnitChange = { selectedTempUnit = it },
-                            onRefresh = onRefresh,
-                            lastUpdateTime = lastUpdateTime
-                        )
+                    error != null -> Box(Modifier.fillMaxSize(), Alignment.Center) {
+                        Text("Error: $error", Modifier.padding(16.dp))
+                    }
+                    else -> {
+                        val onRefresh: () -> Unit = {
+                            if (isOnline(context)) {
+                                if (FavoriteUtils.getFavorites(context).contains(city)) {
+                                    CacheUtils.getFile(context, city).delete()
+                                }
+                                refreshTrigger++
+                            } else {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        message = "Brak internetu. Nie można odświeżyć pogody.",
+                                        duration = SnackbarDuration.Short
+                                    )
+                                }
+                            }
+                        }
+                        if (isPortrait) {
+                            PortraitLayout(
+                                locationName, locationCountry, forecast, selectedTempUnit,
+                                onTempUnitChange = { selectedTempUnit = it },
+                                onRefresh = onRefresh,
+                                lastUpdateTime = lastUpdateTime
+                            )
+                        } else {
+                            LandscapeLayout(
+                                locationName, locationCountry, forecast, selectedTempUnit,
+                                onTempUnitChange = { selectedTempUnit = it },
+                                onRefresh = onRefresh,
+                                lastUpdateTime = lastUpdateTime
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        val navController = rememberNavController()
+        Scaffold(
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            bottomBar = {
+                NavigationBar(
+                    modifier = Modifier.height(48.dp)
+                ) {
+                    NavigationBarItem(
+                        icon = { Box {} },
+                        label = { Text("Aktualna") },
+                        selected = navController.currentBackStackEntry?.destination?.route == "main",
+                        onClick = { navController.navigate("main") }
+                    )
+                    NavigationBarItem(
+                        icon = { Box {} },
+                        label = { Text("Prognoza") },
+                        selected = navController.currentBackStackEntry?.destination?.route == "forecast",
+                        onClick = { navController.navigate("forecast") }
+                    )
+                }
+            }
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                SearchBar(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    onSearch = {
+                        city = searchQuery
+                        onCityChanged(searchQuery)
+                        if (!isOnline(context)) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    message = "Brak internetu. Pokazano ostatnią zapisaną lokalizację.",
+                                    duration = SnackbarDuration.Short
+                                )
+                            }
+                        }
+                    },
+                    onOpenSettings = onOpenSettings
+                )
+                when {
+                    loading -> Box(Modifier.fillMaxSize(), Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                    error != null -> Box(Modifier.fillMaxSize(), Alignment.Center) {
+                        Text("Error: $error", Modifier.padding(16.dp))
+                    }
+                    else -> {
+                        val onRefresh: () -> Unit = {
+                            if (isOnline(context)) {
+                                if (FavoriteUtils.getFavorites(context).contains(city)) {
+                                    CacheUtils.getFile(context, city).delete()
+                                }
+                                refreshTrigger++
+                            } else {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        message = "Brak internetu. Nie można odświeżyć pogody.",
+                                        duration = SnackbarDuration.Short
+                                    )
+                                }
+                            }
+                        }
+                        NavHost(navController, startDestination = "main") {
+                            composable("main") {
+                                if (forecast.isNotEmpty()) {
+                                    if (isPortrait) {
+                                        // Portrait: header, unit, mainweathercard
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(8.dp)
+                                        ) {
+                                            WeatherHeader(
+                                                locationName = locationName,
+                                                locationCountry = locationCountry,
+                                                showRefreshButton = false,
+                                                onRefresh = onRefresh
+                                            )
+                                            UnitSelection(
+                                                selectedTempUnit = selectedTempUnit,
+                                                onTempUnitChange = { selectedTempUnit = it },
+                                                onRefresh = onRefresh
+                                            )
+                                            MainWeatherCard(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(top = 8.dp),
+                                                day = forecast[0],
+                                                selectedTempUnit = selectedTempUnit,
+                                                lastUpdateTime = lastUpdateTime
+                                            )
+                                        }
+                                    } else {
+                                        // Landscape: header (ze wszystkim), pod spodem mainweathercard
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(8.dp)
+                                        ) {
+                                            WeatherHeader(
+                                                locationName = locationName,
+                                                locationCountry = locationCountry,
+                                                showRefreshButton = true,
+                                                onRefresh = onRefresh,
+                                                selectedTempUnit = selectedTempUnit,
+                                                onTempUnitChange = { selectedTempUnit = it }
+                                            )
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            MainWeatherCard(
+                                                modifier = Modifier
+                                                    .fillMaxWidth(),
+                                                day = forecast[0],
+                                                selectedTempUnit = selectedTempUnit,
+                                                lastUpdateTime = lastUpdateTime
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            composable("forecast") {
+                                if (forecast.size > 1) {
+                                    val scrollState = rememberScrollState()
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .verticalScroll(scrollState)
+                                            .padding(8.dp)
+                                    ) {
+                                        ForecastRow(
+                                            forecast = forecast.drop(1).take(8),
+                                            selectedTempUnit = selectedTempUnit
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
