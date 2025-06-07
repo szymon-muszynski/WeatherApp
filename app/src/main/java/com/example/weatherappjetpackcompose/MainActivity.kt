@@ -26,9 +26,9 @@ class MainActivity : ComponentActivity() {
                     contract = ActivityResultContracts.StartActivityForResult()
                 ) { result ->
                     if (result.resultCode == Activity.RESULT_OK) {
-                        val city = result.data?.getStringExtra("selected_city")
-                        if (!city.isNullOrEmpty()) {
-                            selectedCity = city
+                        val cityCountry = result.data?.getStringExtra("selected_city")
+                        if (!cityCountry.isNullOrEmpty()) {
+                            selectedCity = cityCountry
                         }
                     }
                 }
@@ -38,13 +38,19 @@ class MainActivity : ComponentActivity() {
                     WeatherRepository(this@MainActivity).refreshFavoritesIfNeeded(favorites)
                 }
 
+                val city = selectedCity.split(",").getOrNull(0) ?: ""
+                val country = selectedCity.split(",").getOrNull(1) ?: ""
+
                 WeatherScreen(
-                    defaultCity = selectedCity,
+                    defaultCity = city,
+                    defaultCountry = country,
                     onOpenSettings = {
                         val intent = Intent(this, SettingsActivity::class.java)
                         settingsLauncher.launch(intent)
                     },
-                    onCityChanged = { selectedCity = it}
+                    onCityChanged = { newCityCountry ->
+                        selectedCity = newCityCountry
+                    }
                 )
             }
         }

@@ -9,21 +9,21 @@ object CacheUtils {
     private const val CACHE_DIR = "weather_cache"
     private const val CACHE_AGE_MS = 1 * 60 * 1000L  // 3 godziny 3 * 60 * 60 * 1000L
 
-    fun getFile(context: Context, city: String): File {
+    fun getFile(context: Context, city: String, country: String): File {
         val dir = File(context.filesDir, CACHE_DIR)
         if (!dir.exists()) dir.mkdirs()
-        // nazwa pliku: miasto.json
-        return File(dir, "${city.lowercase().replace(" ", "_")}.json")
+        val fileName = "${city.lowercase().replace(" ", "_")}_${country.lowercase().replace(" ", "_")}.json"
+        return File(dir, fileName)
     }
 
-    fun saveCache(context: Context, city: String, data: WeatherResponse) {
-        val file = getFile(context, city)
+    fun saveCache(context: Context, city: String, country: String, data: WeatherResponse) {
+        val file = getFile(context, city, country)
         val wrapper = CacheWrapper(System.currentTimeMillis(), data)
         file.writeText(Gson().toJson(wrapper))
     }
 
-    fun loadCache(context: Context, city: String): WeatherResponse? {
-        val file = getFile(context, city)
+    fun loadCache(context: Context, city: String, country: String): WeatherResponse? {
+        val file = getFile(context, city, country)
         if (!file.exists()) return null
         val wrapper = try {
             Gson().fromJson(file.readText(), CacheWrapper::class.java)
@@ -34,8 +34,8 @@ object CacheUtils {
         return wrapper.data
     }
 
-    fun isCacheValid(context: Context, city: String): Boolean {
-        val file = getFile(context, city)
+    fun isCacheValid(context: Context, city: String, country: String): Boolean {
+        val file = getFile(context, city, country)
         if (!file.exists()) return false
         val wrapper = try {
             Gson().fromJson(file.readText(), CacheWrapper::class.java)
@@ -46,8 +46,8 @@ object CacheUtils {
         return System.currentTimeMillis() - wrapper.timestamp <= CACHE_AGE_MS
     }
 
-    fun getLastUpdateTime(context: Context, city: String): Long? {
-        val file = getFile(context, city)
+    fun getLastUpdateTime(context: Context, city: String, country: String): Long? {
+        val file = getFile(context, city, country)
         if (!file.exists()) return null
         val wrapper = try {
             Gson().fromJson(file.readText(), CacheWrapper::class.java)

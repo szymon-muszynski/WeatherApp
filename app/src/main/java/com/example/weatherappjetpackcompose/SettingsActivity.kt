@@ -47,26 +47,29 @@ fun SettingsScreen(activity: ComponentActivity) {
         }
     }
 
-    // inicjalizowanie stanow na true, zeby potem moc odklikiwac serduszka
     val favoriteStates = remember {
         mutableStateMapOf<String, MutableState<Boolean>>().apply {
-            allFavorites.forEach { city ->
-                this[city] = mutableStateOf(true)
+            allFavorites.forEach { cityCountry ->
+                this[cityCountry] = mutableStateOf(true)
             }
         }
     }
 
-    //zapisanie zmian przy wyjsciu
     DisposableEffect(Unit) {
         onDispose {
-            favoriteStates.forEach { (city, isFavState) ->
-                if (isFavState.value) {
-                    FavoriteUtils.addFavorite(context, city)
-                } else {
-                    FavoriteUtils.removeFavorite(context, city)
-                    val file = CacheUtils.getFile(context, city)
-                    if(file.exists()){
-                        file.delete()
+            favoriteStates.forEach { (cityCountry, isFavState) ->
+                val parts = cityCountry.split(",")
+                if (parts.size == 2) {
+                    val city = parts[0]
+                    val country = parts[1]
+                    if (isFavState.value) {
+                        FavoriteUtils.addFavorite(context, city, country)
+                    } else {
+                        FavoriteUtils.removeFavorite(context, city, country)
+                        val file = CacheUtils.getFile(context, city, country)
+                        if (file.exists()) {
+                            file.delete()
+                        }
                     }
                 }
             }
@@ -95,8 +98,8 @@ fun SettingsScreen(activity: ComponentActivity) {
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(allFavorites) { city ->
-                        val isFavorite = favoriteStates[city]!! // już na pewno istnieje
+                    items(allFavorites) { cityCountry ->
+                        val isFavorite = favoriteStates[cityCountry]!!
 
                         Row(
                             modifier = Modifier
@@ -112,7 +115,7 @@ fun SettingsScreen(activity: ComponentActivity) {
                                     .padding(end = 8.dp)
                                     .clickable {
                                         val resultIntent = Intent().apply {
-                                            putExtra("selected_city", city)
+                                            putExtra("selected_city", cityCountry)
                                         }
                                         activity.setResult(android.app.Activity.RESULT_OK, resultIntent)
                                         activity.finish()
@@ -124,7 +127,7 @@ fun SettingsScreen(activity: ComponentActivity) {
                                     modifier = Modifier.size(32.dp)
                                 )
                                 Text(
-                                    text = city,
+                                    text = cityCountry,
                                     style = MaterialTheme.typography.headlineSmall,
                                     modifier = Modifier.padding(start = 8.dp)
                                 )

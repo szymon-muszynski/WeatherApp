@@ -49,6 +49,7 @@ fun isTablet(): Boolean {
 @Composable
 fun WeatherScreen(
     defaultCity: String = "Lodz",
+    defaultCountry: String = "Poland",
     onOpenSettings: () -> Unit,
     onCityChanged: (String) -> Unit
 ) {
@@ -58,6 +59,7 @@ fun WeatherScreen(
     val isTablet = isTablet()
 
     var city by rememberSaveable { mutableStateOf("") }
+    var country by rememberSaveable { mutableStateOf("") }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var selectedTempUnit by rememberSaveable { mutableStateOf("°C") }
 
@@ -72,22 +74,23 @@ fun WeatherScreen(
     var lastUpdateTime by remember { mutableStateOf<Long?>(null) }
     var refreshTrigger by remember { mutableStateOf(0) }
 
-    LaunchedEffect(defaultCity) {
+    LaunchedEffect(defaultCity, defaultCountry) {
         if (defaultCity.isNotEmpty()) {
             city = defaultCity
+            country = defaultCountry
             searchQuery = defaultCity
         }
     }
 
-    LaunchedEffect(city, refreshTrigger) {
+    LaunchedEffect(city, country, refreshTrigger) {
         loading = true
         error = null
         scope.launch {
             try {
-                val isFav = FavoriteUtils.getFavorites(context).contains(city)
-                val data = WeatherRepository(context).getWeatherForecast(city, isFav)
+                val isFav = FavoriteUtils.isFavorite(context, city, country)
+                val data = WeatherRepository(context).getWeatherForecast(city, country, isFav)
                 lastUpdateTime = if (isFav) {
-                    CacheUtils.getLastUpdateTime(context, city)
+                    CacheUtils.getLastUpdateTime(context, city, country)
                 } else {
                     LatestCityCacheUtils.getLastUpdateTime(context)
                 }
@@ -147,8 +150,8 @@ fun WeatherScreen(
                     else -> {
                         val onRefresh: () -> Unit = {
                             if (isOnline(context)) {
-                                if (FavoriteUtils.getFavorites(context).contains(city)) {
-                                    CacheUtils.getFile(context, city).delete()
+                                if (FavoriteUtils.isFavorite(context, city, country)) {
+                                    CacheUtils.getFile(context, city, country).delete()
                                 }
                                 refreshTrigger++
                             } else {
@@ -234,8 +237,8 @@ fun WeatherScreen(
                     else -> {
                         val onRefresh: () -> Unit = {
                             if (isOnline(context)) {
-                                if (FavoriteUtils.getFavorites(context).contains(city)) {
-                                    CacheUtils.getFile(context, city).delete()
+                                if (FavoriteUtils.isFavorite(context, city, country)) {
+                                    CacheUtils.getFile(context, city, country).delete()
                                 }
                                 refreshTrigger++
                             } else {
@@ -485,9 +488,11 @@ fun WeatherHeader(
     onTempUnitChange: ((String) -> Unit)? = null
 ) {
     val context = LocalContext.current
-    val favorite = remember(locationName) {
-        mutableStateOf(FavoriteUtils.isFavorite(context, locationName))
+    val favorite = remember(locationName + locationCountry) {
+        mutableStateOf(FavoriteUtils.isFavorite(context, locationName, locationCountry))
     }
+    val scope = rememberCoroutineScope()
+
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -541,10 +546,16 @@ fun WeatherHeader(
             val newFavorite = !favorite.value
             favorite.value = newFavorite
             if (newFavorite) {
-                FavoriteUtils.addFavorite(context, locationName)
+                FavoriteUtils.addFavorite(context, locationName, locationCountry)
+                scope.launch {
+                    try {
+                        val data = WeatherRepository(context).getWeatherForecast(locationName, locationCountry, isFavorite = true)
+                        CacheUtils.saveCache(context, locationName, locationCountry, data)
+                    } catch (_: Exception) { }
+                }
             } else {
-                FavoriteUtils.removeFavorite(context, locationName)
-                val file = CacheUtils.getFile(context, locationName)
+                FavoriteUtils.removeFavorite(context, locationName, locationCountry)
+                val file = CacheUtils.getFile(context, locationName, locationCountry)
                 if (file.exists()) {
                     file.delete()
                 }
