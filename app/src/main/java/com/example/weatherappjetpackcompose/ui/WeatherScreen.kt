@@ -39,6 +39,7 @@ import java.util.Locale
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.navigation.compose.*
+import kotlinx.coroutines.delay
 
 @Composable
 fun isTablet(): Boolean {
@@ -74,11 +75,22 @@ fun WeatherScreen(
     var lastUpdateTime by remember { mutableStateOf<Long?>(null) }
     var refreshTrigger by remember { mutableStateOf(0) }
 
+    val autoRefreshIntervalMs = 1 * 60 * 1000L // 1 minuta
+
     LaunchedEffect(defaultCity, defaultCountry) {
         if (defaultCity.isNotEmpty()) {
             city = defaultCity
             country = defaultCountry
             searchQuery = defaultCity
+        }
+    }
+
+    LaunchedEffect(city, country) {
+        while (true) {
+            delay(autoRefreshIntervalMs)
+            if (isOnline(context)) {
+                refreshTrigger++
+            }
         }
     }
 
@@ -144,9 +156,11 @@ fun WeatherScreen(
                     loading -> Box(Modifier.fillMaxSize(), Alignment.Center) {
                         CircularProgressIndicator()
                     }
+
                     error != null -> Box(Modifier.fillMaxSize(), Alignment.Center) {
                         Text("Error: $error", Modifier.padding(16.dp))
                     }
+
                     else -> {
                         val onRefresh: () -> Unit = {
                             if (isOnline(context)) {
@@ -231,9 +245,11 @@ fun WeatherScreen(
                     loading -> Box(Modifier.fillMaxSize(), Alignment.Center) {
                         CircularProgressIndicator()
                     }
+
                     error != null -> Box(Modifier.fillMaxSize(), Alignment.Center) {
                         Text("Error: $error", Modifier.padding(16.dp))
                     }
+
                     else -> {
                         val onRefresh: () -> Unit = {
                             if (isOnline(context)) {
@@ -343,13 +359,20 @@ fun PortraitLayout(
 ) {
     val scrollState = rememberScrollState()
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(8.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(8.dp)
+    ) {
 
         UnitSelection(selectedTempUnit, onTempUnitChange, onRefresh)
         Spacer(modifier = Modifier.height(8.dp))
-        WeatherHeader(locationName, locationCountry, showRefreshButton = false, onRefresh=onRefresh)
+        WeatherHeader(
+            locationName,
+            locationCountry,
+            showRefreshButton = false,
+            onRefresh = onRefresh
+        )
         if (forecast.isNotEmpty()) {
             MainWeatherCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -384,9 +407,11 @@ fun LandscapeLayout(
     onRefresh: () -> Unit,
     lastUpdateTime: Long?
 ) {
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(8.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(8.dp)
+    ) {
 
         WeatherHeader(
             locationName,
@@ -399,10 +424,11 @@ fun LandscapeLayout(
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(modifier = Modifier.fillMaxSize()) {
-            Column(modifier = Modifier
-                .fillMaxHeight()
-                .weight(1f)
-                .padding(end = 8.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1f)
+                    .padding(end = 8.dp)
 
             ) {
                 if (forecast.isNotEmpty()) {
@@ -419,11 +445,12 @@ fun LandscapeLayout(
 
             val scrollState = rememberScrollState()
 
-            Column(modifier = Modifier
-                .fillMaxHeight()
-                .weight(1f)
-                .padding(start = 8.dp)
-                .verticalScroll(scrollState)
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1f)
+                    .padding(start = 8.dp)
+                    .verticalScroll(scrollState)
             ) {
                 if (forecast.size > 1) {
                     ForecastRow(
@@ -457,7 +484,8 @@ fun SearchBar(
                 Text(
                     "Search for any location",
                     fontSize = if (isTablet()) 20.sp else 16.sp
-                ) },
+                )
+            },
             modifier = Modifier.weight(1f)
         )
         IconButton(onClick = onSearch) {
@@ -519,16 +547,20 @@ fun WeatherHeader(
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (isLandscape && selectedTempUnit != null && onTempUnitChange != null) {
                 TextButton(onClick = { onTempUnitChange("°C") }) {
-                    Text("°C",
+                    Text(
+                        "°C",
                         fontSize = if (isTablet()) 24.sp else 18.sp,
                         color = if (selectedTempUnit == "°C") MaterialTheme.colorScheme.onBackground
-                    else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+                        else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                    )
                 }
                 TextButton(onClick = { onTempUnitChange("°F") }) {
-                    Text("°F",
+                    Text(
+                        "°F",
                         fontSize = if (isTablet()) 24.sp else 18.sp,
                         color = if (selectedTempUnit == "°F") MaterialTheme.colorScheme.onBackground
-                    else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+                        else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                    )
                 }
             }
         }
@@ -549,9 +581,14 @@ fun WeatherHeader(
                 FavoriteUtils.addFavorite(context, locationName, locationCountry)
                 scope.launch {
                     try {
-                        val data = WeatherRepository(context).getWeatherForecast(locationName, locationCountry, isFavorite = true)
+                        val data = WeatherRepository(context).getWeatherForecast(
+                            locationName,
+                            locationCountry,
+                            isFavorite = true
+                        )
                         CacheUtils.saveCache(context, locationName, locationCountry, data)
-                    } catch (_: Exception) { }
+                    } catch (_: Exception) {
+                    }
                 }
             } else {
                 FavoriteUtils.removeFavorite(context, locationName, locationCountry)
@@ -588,12 +625,20 @@ fun UnitSelection(
         // Temperatura
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = { onTempUnitChange("°C") }) {
-                Text("°C", fontSize = if (isTablet()) 30.sp else 24.sp, color = if (selectedTempUnit == "°C") MaterialTheme.colorScheme.onBackground
-                else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+                Text(
+                    "°C",
+                    fontSize = if (isTablet()) 30.sp else 24.sp,
+                    color = if (selectedTempUnit == "°C") MaterialTheme.colorScheme.onBackground
+                    else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                )
             }
             TextButton(onClick = { onTempUnitChange("°F") }) {
-                Text("°F", fontSize = if (isTablet()) 30.sp else 24.sp, color = if (selectedTempUnit == "°F") MaterialTheme.colorScheme.onBackground
-                else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+                Text(
+                    "°F",
+                    fontSize = if (isTablet()) 30.sp else 24.sp,
+                    color = if (selectedTempUnit == "°F") MaterialTheme.colorScheme.onBackground
+                    else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                )
             }
         }
         IconButton(onClick = onRefresh) {
@@ -605,7 +650,6 @@ fun UnitSelection(
         }
     }
 }
-
 
 
 @Composable
@@ -636,7 +680,8 @@ fun MainWeatherCard(
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -654,7 +699,8 @@ fun MainWeatherCard(
                             modifier = Modifier.size(if (isTablet()) 28.dp else 20.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Date: ${formattedTime}", fontSize = if (isTablet()) 24.sp else 18.sp)                    }
+                        Text("Date: ${formattedTime}", fontSize = if (isTablet()) 24.sp else 18.sp)
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.InvertColors, // kropla
@@ -662,7 +708,10 @@ fun MainWeatherCard(
                             modifier = Modifier.size(if (isTablet()) 28.dp else 20.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Humidity: ${day.humidity}%", fontSize = if (isTablet()) 24.sp else 18.sp)
+                        Text(
+                            "Humidity: ${day.humidity}%",
+                            fontSize = if (isTablet()) 24.sp else 18.sp
+                        )
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -686,7 +735,7 @@ fun MainWeatherCard(
                         val tempF = (day.temperature * 9 / 5) + 32
                         "${"%.1f".format(tempF)}°F"
                     }
-                    Text(displayedTemp,fontSize = if (isTablet()) 40.sp else 30.sp)
+                    Text(displayedTemp, fontSize = if (isTablet()) 40.sp else 30.sp)
                     AsyncImage(
                         model = day.conditionIconUrl,
                         contentDescription = day.conditionText,
@@ -734,9 +783,11 @@ fun ForecastRow(forecast: List<WeatherDayUi>, selectedTempUnit: String) {
                             val tempF = (day.temperature * 9 / 5) + 32
                             "${"%.1f".format(tempF)}°F"
                         }
-                        Text(displayedTemp,
+                        Text(
+                            displayedTemp,
                             fontSize = if (isTablet()) 24.sp else 18.sp,
-                            style = MaterialTheme.typography.bodyMedium)
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
